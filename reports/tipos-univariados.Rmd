@@ -1,12 +1,12 @@
 ---
-title: "Tipos de filme de FULANO(A)"
+title: "Tipos de filme de Chris Evans"
 output:
     html_document:
     df_print: paged
 theme: sandstone
 ---
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(here)
 library(cluster)
@@ -28,56 +28,73 @@ paleta = c("#404E4D",
            "#F4743B")
 ```
 
-```{r}
+```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 ## ANTES DE USAR
 # Para criar data/movies.csv
 import_data("chris_evans") 
 ```
 
 
-```{r read}
+```{r read, results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 filmes = read_imported_data()
 ```
 
-## Descrição
+# Descrição dos dados
 
-```{r}
+Os dados utilizados foram obtidos através do site rotten tomatoes. Mais especificamente, utilizou-se de uma base que contém informações sobre as participações de um certo ator em filmes. Neste relatório, o ator escolhido foi Chris Evans e o objetivo é aplicar algoritmos de agrupamento com a finalidade de identificar e caracterizar os grupos que compõem os filmes desse ator.
+
+Com isso, é possível o acesso as seguintes variáveis para cada um dos 22 filmes disponíveis de Chris Evans: avaliação no rotten tomatoes, nome do filme, papel, bilheteria e ano.
+
+```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
+summary(filmes)
+
+```
+
+Dado que o objetivo é agrupar os filmes e que a quantidade de variáveis que descrevem cada filme está limitada ao que foi descrito acima, espera-se, a priori, que a avaliação e a bilheteria possam servir para um agrupamento satisfatório. Para confirmar esta hipótese, pode-se observar o gráfico de dispersão dos pontos nas dimensões de avaliação x bilheteria.
+
+```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
+
 filmes %>% 
     ggplot(aes(x = avaliacao, y = bilheteria)) + 
     geom_point(size = 4, color = paleta[1]) 
 ```
 
+A partir dessa visualização, pode-se perceber uma leve estrutura de grupos. em outras palavras, alguns pontos parecem estar associados de forma que seus comportamentos na avaliação e bilheteria são muito semelhates.
 
+Logo, para que seja possível extrair essa característica de grupos da melhor maneira, deve-se observar as distribuições das variáveis que são de interesse para esse agrupamento em duas dimensões.
 
-```{r}
+Abaixo, pode-se observar como comportam-se essas variáveis.
+
+```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 filmes %>% 
-    ggplot(aes(x = bilheteria, y = avaliacao)) + 
-    geom_bar(fill = paleta[2], color = "black", iden) + 
-    geom_rug(size = .5) 
-```
-
-```{r}
-filmes %>% 
-    ggplot(aes(x = avaliacao)) + 
-    geom_histogram(binwidth = 5, fill = paleta[3], color = "black") + 
-    geom_rug(size = .5) 
+    ggplot(aes(x = log(avaliacao))) + 
+    geom_histogram(binwidth = .1, fill = paleta[3], color = "black") + 
+    geom_rug(size = .5) + ggtitle("Histograma das avaliações")
 
 filmes %>% 
     ggplot(aes(x = bilheteria)) + 
-    geom_histogram(fill = paleta[3], color = "black") + 
-    geom_rug(size = .5) 
-
-filmes %>% 
-    ggplot(aes(x = log(bilheteria))) + 
-    geom_histogram(bins = 10, fill = paleta[3], color = "black") + 
-    geom_rug(size = .5) 
-
+    geom_histogram(bins = 40, fill = paleta[3], color = "black") + 
+    geom_rug(size = .5) + ggtitle("Histograma das bilheterias") 
 
 ```
 
-## Estrutura de grupos?
+## O que fazer com a distribuição assimétrica da bilheteria?
 
-```{r}
+É perceptível que a distribuição da variável bilheteria não possui um formato simétrico, ou seja, seus valores ocorrem muito mais quando estão próximos de zero e valores mais altos são menos frequentes.
+
+Desse modo, pode-se aplicar uma função logarítimica com o objetivo de reduzir essa distância entre os valores, deixando, assim, a distribuição mais simétrica ( ou próxima de uma distribuição normal).
+
+```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
+filmes %>% 
+    ggplot(aes(x = log(bilheteria))) + 
+    geom_histogram(bins = 40, fill = paleta[3], color = "black") + 
+    geom_rug(size = .5) + ggtitle("Histograma das bilheterias (com aplicação de log)") 
+```
+
+Após essa transformação, pode-se redesenhar o gráfico de dispersão visualizado na sessão anterior.
+
+```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
+
 p = filmes %>% 
     ggplot(aes(x = avaliacao, y = log(bilheteria), label = filme)) + 
     geom_jitter(width = .05, alpha = .3, size = 3) + 
@@ -86,9 +103,17 @@ p = filmes %>%
 ggplotly(p)
 ```
 
-## Agrupamento hierárquico
+Nessa nova faixa de valores, os pontos apresentam-se em uma estrutura de grupos mais definida. Agora, pode-se seguir para a fase de aplicar o algoritmo de agrupamento.
 
-```{r}
+# Agrupamento hierárquico
+
+Nesse momento, inicia-se a etapa de agrupamento propriamente dita. O que acontecerá é que um algoritmo de agrupamento hierárquico será aplicado aos filmes. Nesse algoritmo, os pontos serão colocados em um mesmo grupo de acordo com as suas distâncias para o centro de um dado grupo. Esse processo começa com cada ponto sendo considerado um grupo. No final, todos os pontos estarão no mesmo grupo. A partir do Dendrograma abaixo, a intuição do algoritmo poderá ser melhor entendida.
+
+Além disso, é de extrema importância ressaltar que, como a distância calculada é a euclidiana, as escalas nas quais o pontos estão influenciam no peso de cada termo usado no cálculo.
+
+Por fim, deve-se escolher qual passo do algoritmo tinha o melhor estado de grupos formados antes de juntar todos os pontos em um mesmo grupo. Para isso, o gráfico de linha é útil. A medida de dissimilaridade representa o quão diferente foram os grupos que uniram-se em um dado passo do algoritmo. Desse modo, quando esta medida estiver aumentando muito, pode ser um bom indício de que grupos muito dissimilares estão sendo considerados como um só. Logo, é melhor parar o algoritmo no passo anterior a isso.
+
+```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 agrupamento_h = filmes %>%  
     mutate(bilheteria = log(bilheteria)) %>% 
     mutate_at(vars(avaliacao, bilheteria), 
@@ -112,7 +137,11 @@ data.frame(height = agrupamento_h$height) %>%
 
 ```
 
-```{r}
+Ao analisar o gráfico de linha logo acima, percebe-se que a dissimilaridade aumenta exponencialmente a partir do passo 16. Isso quer dizer que, aproximadamente, no ponto médio entre 0.50 e 0.75 de dissimilaridade deve-se parar o algoritmo. Ao utilizar o dendrograma, chega-se a conclusão de que 7 grupos pode ser uma boa quantidade, dada a medida de dissimilaridade.
+
+Pode-se, também, ver o gráfico de dispersão na medida em que o algoritmo faz a junção dos grupos.
+
+```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 get_grupos <- function(agrupamento, num_grupos){
     agrupamento %>% 
         cutree(num_grupos) %>% 
@@ -122,13 +151,13 @@ get_grupos <- function(agrupamento, num_grupos){
         mutate(grupo = as.character(grupo))
 }
 
-atribuicoes = get_grupos(agrupamento_h, num_grupos = 1:6)
+atribuicoes = get_grupos(agrupamento_h, num_grupos = 1:8)
 
 atribuicoes = atribuicoes %>% 
     left_join(filmes, by = c("label" = "filme"))
 
 atribuicoes %>% 
-    ggplot(aes(x = bilheteria, y = avaliacao, colour = grupo)) + 
+    ggplot(aes(x = log(bilheteria), y = avaliacao, colour = grupo)) + 
     geom_jitter(width = .02, height = 0, size = 1.6, alpha = .6) + 
     facet_wrap(~ paste(k, " grupos")) + 
     scale_color_brewer(palette = "Dark2")
@@ -136,18 +165,53 @@ atribuicoes %>%
 
 ```
 
-```{r}
-k_escolhido = 5
+E, visualizando para a quantidade de grupos escolhida, temos:
 
-a <- atribuicoes %>% 
+```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
+k_escolhido = 7
+
+atribuicoes.vis <- atribuicoes %>% 
+                    mutate(bilheteria = log(bilheteria))
+
+a <- atribuicoes.vis %>% 
     filter(k == k_escolhido) %>% 
-    ggplot(aes(x = log(bilheteria), y = avaliacao, colour = grupo)) + 
+    ggplot(aes(x = bilheteria, y = avaliacao, colour = grupo, label = label)) + 
     geom_jitter(width = .02, height = 0, size = 3, alpha = .6) + 
     facet_wrap(~ paste(k, " grupos")) + 
     scale_color_brewer(palette = "Dark2") + 
-    labs(x = "bilheteria", y = "Avaliação RT") + 
-    coord_flip() 
+    labs(x = "bilheteria", y = "Avaliação RT")
 
 ggplotly(a)
-```
+    ```
 
+# Dando nome aos bois
+
+Para um entendimento mais profundo dos grupos, pode-se usar da interatividade da visualização. Com isso, temos:
+
+* Os sucessos da Marvel:
+
+O grupo 1 é contém todos os filmes nos quais Chris Evans participou de filmes da Marvel como o Capitão América e sob a direção da Disney. Os filmes desse grupo são claramente os maiores sucessos do ator, tanto em bilheteria, quanto na avaliação do RT. Como: Marvel's the Avengers.
+
+* Pobre e feliz:
+
+O grupo 2 é formado por um filme apenas, devido ao seu comportamento diferenciado. Snowpiercer foi aclamado pelos avaliadores no RT, sendo o filme de maior avaliação entre os disponíveis nos dados, porém não fez tanto sucesso de bilheteria.
+
+* Dinheiro não compra felicidade, mas compra coxinha:
+
+O grupo 3 é formado por filmes que não foram tão felizes quanto o grupo 2 nas suas avaliações, porém ainda estão em uma posição mais alta que a maioria. Todavia, esse grupo também é um desastre em bilheteria.
+
+* Fora Temer:
+
+O grupo 4 é formado por filmes que não foram bem na avaliação, porém ainda possuem dinheiro o bastante pra se unirem. Esse grupo contém a menor nota na avaliação do RT para esse ator, o filme The Perfect Score.
+
+* O diferentão:
+
+O grupo 5 também possui apenas um filme, que bem se encaixaria no grupo 4. Esse filme também não é um dos maiores sucesso de bilheteria, porém está em uma posição diferentona (com relação ao grupo 4) na sua avaliação do rotten tomatoes, que foi relativamente alta.
+
+* Sem um tostão no bolso:
+
+O grupo 6 é o que tem o menor valor de bilheteria. Embora sua avaliação não seja das piores.
+
+* Riquinho, mas sem graça:
+
+O grupo 7 é um caso interessante. Apesar dos valores de bilheteria ser tão alto quanto alguns dos sucessos da Marvel, a avaliação é desastrosa. Coincidentemente (ou não), esses também são filmes do universo Marvel e um é a sequência do outro. Eles são: O Quarteto Fantástico e a sua continuação com o Surfista Prateado.
